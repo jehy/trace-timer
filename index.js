@@ -38,25 +38,29 @@ class TraceTimer {
   *
   * @param {String} name timer name
   * @param {Object} [meta] some data about this timer
-  * @param {boolean} [blocking] does it block execution
   */
-  constructor(name, meta = null, blocking = false) {
+  constructor(name, meta = null) {
     if (!name) {
       throw new Error('name should be provided for timer!');
     }
     this.start = getMillis();
-    this.blocking = blocking;
     this.meta = meta;
     this.name = name;
     this.children = [];
+    this.blocking = false;
   }
 
   /**
    *
    * @param {TraceTimer} timer child timer to add
+   * @param {boolean} [blocking] does it block execution
+   * @returns {TraceTimer} timer child timer to add
    */
-  addChild(timer) {
+  addChild(timer, blocking = false) {
     this.children.push(timer);
+    timer.blocking = blocking;
+    timer.addMetaMain = this.addMetaMain;
+    return timer;
   }
 
   /**
@@ -84,7 +88,7 @@ class TraceTimer {
 
   /**
    *
-   * @param {function} func async sync function to count time
+   * @param {function} func async function result to be awaited
    * @returns function return value
    */
   async countAsync(func) {
@@ -98,17 +102,43 @@ class TraceTimer {
     }
   }
 
+
   /**
-  *
-  * @param {Object} meta some data about this timer
+   *
+   * @param {Promise} promise from async function result to be awaited
+   * @returns function return value
+   */
+  async countPromise(promise) {
+    try {
+      return await promise;
+    } catch (err) {
+      this.error = err.message;
+      throw err;
+    } finally {
+      this.end = getMillis();
+    }
+  }
+
+  /**
+   *
+   * @param {Object} meta some data about this timer
    * @returns {Object} new meta
-  */
+   */
   addMeta(meta) {
     if (!this.meta) {
       this.meta = meta;
       return meta;
     }
     return Object.assign(this.meta, meta);
+  }
+
+  /**
+   *
+   * @param {Object} meta some data about main timer
+   * @returns {Object} new meta
+   */
+  addMetaMain(meta) {
+    this.addMeta(meta);
   }
 
   /**

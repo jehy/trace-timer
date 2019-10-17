@@ -13,6 +13,10 @@ function clone(obj) {
   return JSON.parse(JSON.stringify(obj));
 }
 
+assert.deepEqualClone = (a, b)=>{
+  assert.deepEqual(clone(a), clone(b));
+};
+
 describe('TraceTimer: simple', ()=>{
   let clock;
   let timeStub;
@@ -25,35 +29,35 @@ describe('TraceTimer: simple', ()=>{
     timeStub.restore();
   });
   it('should create timer without meta', ()=>{
-    const timer = new TraceTimer('someName', null, true);
+    const timer = new TraceTimer('someName', null);
     const timerExpected = {
       start: 100,
       children: [],
       meta: null,
       name: 'someName',
-      blocking: true,
+      blocking: false,
     };
     assert.deepEqual(timer, timerExpected);
   });
   it('should create timer with meta', ()=>{
-    const timer = new TraceTimer('someName', {a: 1}, true);
+    const timer = new TraceTimer('someName', {a: 1});
     const timerExpected = {
       start: 100,
       children: [],
       meta: {a: 1},
       name: 'someName',
-      blocking: true,
+      blocking: false,
     };
     assert.deepEqual(timer, timerExpected);
   });
   it('should be able to add meta', ()=>{
-    const timer = new TraceTimer('someName', null, true);
+    const timer = new TraceTimer('someName', null);
     const timerExpected = {
       start: 100,
       children: [],
       meta: null,
       name: 'someName',
-      blocking: true,
+      blocking: false,
     };
     assert.deepEqual(timer, timerExpected);
     timer.addMeta({a: 1});
@@ -62,7 +66,7 @@ describe('TraceTimer: simple', ()=>{
       children: [],
       meta: {a: 1},
       name: 'someName',
-      blocking: true,
+      blocking: false,
     };
     assert.deepEqual(timer, timerExpected2);
     timer.addMeta({b: 2});
@@ -71,12 +75,12 @@ describe('TraceTimer: simple', ()=>{
       children: [],
       meta: {a: 1, b: 2},
       name: 'someName',
-      blocking: true,
+      blocking: false,
     };
     assert.deepEqual(timer, timerExpected3);
   });
   it('should log time for sync functions', ()=>{
-    const timer = new TraceTimer('someName', null, false);
+    const timer = new TraceTimer('someName');
     const res = timer.countSync(()=>{ clock.tick(100); return 1; });
     const timerExpected = {
       start: 100,
@@ -90,8 +94,24 @@ describe('TraceTimer: simple', ()=>{
     assert.equal(res, 1);
   });
   it('should log time for async functions', async ()=>{
-    const timer = new TraceTimer('someName', null, false);
-    const res = await timer.countAsync(async ()=>{ clock.tick(100); return 1; });
+    const timer = new TraceTimer('someName', null);
+    const res = await timer.countAsync(()=>{ clock.tick(100); return 1; });
+    const timerExpected = {
+      start: 100,
+      end: 200,
+      children: [],
+      meta: null,
+      name: 'someName',
+      blocking: false,
+    };
+    assert.deepEqual(timer, timerExpected);
+    assert.equal(res, 1);
+  });
+
+  it('should log time for async functions', async ()=>{
+    async function xxx() { clock.tick(100); return 1; }
+    const timer = new TraceTimer('someName', null);
+    const res = await timer.countPromise(xxx());
     const timerExpected = {
       start: 100,
       end: 200,
@@ -107,6 +127,23 @@ describe('TraceTimer: simple', ()=>{
   it('should catch errors in sync funcs', async ()=>{
     const timer = new TraceTimer('someName', null, false);
     assert.throws(()=>timer.countSync(()=>{ clock.tick(100); throw new Error('test'); }), Error, 'test');
+    const timerExpected = {
+      start: 100,
+      end: 200,
+      children: [],
+      meta: null,
+      name: 'someName',
+      blocking: false,
+      error: 'test',
+    };
+    assert.deepEqual(timer, timerExpected);
+  });
+
+
+  it('should catch errors in promises', async ()=>{
+    const timer = new TraceTimer('someName', null, false);
+    async function xxx() { clock.tick(100); throw new Error('test'); }
+    await assert.rejects(()=>timer.countPromise(xxx()), Error, 'test');
     const timerExpected = {
       start: 100,
       end: 200,
@@ -143,21 +180,21 @@ describe('TraceTimer: complex', ()=>{
   before(()=>{
     clock = sinon.useFakeTimers(100);
     timeStub = sinon.stub(performance, 'now').callsFake(()=>new Date().getTime());
-    timer = new TraceTimer('someName', null, false);
-    const timer1 = new TraceTimer('someChild1', null, false);
+    timer = new TraceTimer('someName', null);
+    const timer1 = new TraceTimer('someChild1', null);
     timer1.countSync(()=>clock.tick(100));
-    const timer2 = new TraceTimer('someChild2', null, false);
+    const timer2 = new TraceTimer('someChild2', null);
     timer2.countSync(()=>clock.tick(100));
     // eslint-disable-next-line sonarjs/no-duplicate-string
-    const timer3 = new TraceTimer('someChild1.1', {a: 1}, false);
+    const timer3 = new TraceTimer('someChild1.1', {a: 1});
     timer3.countSync(()=>clock.tick(100));
     // eslint-disable-next-line sonarjs/no-duplicate-string
-    const timer4 = new TraceTimer('someChild1.2', null, true);
+    const timer4 = new TraceTimer('someChild1.2', null);
     timer4.countSync(()=>clock.tick(200));
     timer.addChild(timer1);
     timer.addChild(timer2);
     timer1.addChild(timer3);
-    timer1.addChild(timer4);
+    timer1.addChild(timer4, true);
   });
   after(()=>{
     clock.restore();
@@ -184,7 +221,7 @@ describe('TraceTimer: complex', ()=>{
         start: 200, blocking: false, meta: null, name: 'someChild2', children: [], end: 300,
       }],
     };
-    assert.deepEqual(timer, timerExpected);
+    assert.deepEqualClone(timer, timerExpected);
   });
 
   it('should be able to print data as a table', ()=>{

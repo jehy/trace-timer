@@ -46,6 +46,35 @@ describe('TraceTimer: simple', ()=>{
     };
     assert.deepEqual(timer, timerExpected);
   });
+  it('should be able to add meta', ()=>{
+    const timer = new TraceTimer('someName', null, true);
+    const timerExpected = {
+      start: 100,
+      children: [],
+      meta: null,
+      name: 'someName',
+      blocking: true,
+    };
+    assert.deepEqual(timer, timerExpected);
+    timer.addMeta({a: 1});
+    const timerExpected2 = {
+      start: 100,
+      children: [],
+      meta: {a: 1},
+      name: 'someName',
+      blocking: true,
+    };
+    assert.deepEqual(timer, timerExpected2);
+    timer.addMeta({b: 2});
+    const timerExpected3 = {
+      start: 100,
+      children: [],
+      meta: {a: 1, b: 2},
+      name: 'someName',
+      blocking: true,
+    };
+    assert.deepEqual(timer, timerExpected3);
+  });
   it('should log time for sync functions', ()=>{
     const timer = new TraceTimer('someName', null, false);
     const res = timer.countSync(()=>{ clock.tick(100); return 1; });

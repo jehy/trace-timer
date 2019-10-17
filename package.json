@@ -1,0 +1,55 @@
+{
+  "name": "trace-timer",
+  "version": "0.0.1",
+  "description": "trace timer",
+  "keywords": [],
+  "author": "Jehy",
+  "license": "MIT",
+  "main": "./index.js",
+  "scripts": {
+    "lint": "./node_modules/.bin/eslint .",
+    "test": "mocha --exit",
+    "coverage": "nyc mocha -t 10000",
+    "check_coverage": "nyc check-coverage --lines 90 --functions 70 --branches 70",
+    "prepublishOnly": "npm test && npm run coverage && npm run check_coverage && npm run lint"
+  },
+  "dependencies": {},
+  "engines": {
+    "node": ">=8.0.0"
+  },
+  "devDependencies": {
+    "chai": "^4.2.0",
+    "chai-as-promised": "^7.1.1",
+    "eslint": "6.5.1",
+    "eslint-config-airbnb-base": "14.0.0",
+    "eslint-loader": "3.0.2",
+    "eslint-plugin-import": "2.18.2",
+    "eslint-plugin-node": "10.0.0",
+    "eslint-plugin-promise": "4.2.1",
+    "eslint-plugin-sonarjs": "0.4.0",
+    "eslint-plugin-standard": "4.0.1",
+    "husky": "3.0.9",
+    "lint-staged": "9.4.2",
+    "mocha": "^6.2.1",
+    "nyc": "^14.1.1",
+    "sinon": "^7.5.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jehy/trace-timer.git"
+  },
+  "homepage": "https://github.com/jehy/trace-timer.git",
+  "directories": {},
+  "husky": {
+    "hooks": {
+      "pre-commit": "lint-staged",
+      "pre-push": "npm run coverage && npm run check_coverage && npm run lint"
+    }
+  },
+  "lint-staged": {
+    "*.js": [
+      "eslint",
+      "git add"
+    ]
+  }
+}

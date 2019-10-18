@@ -39,6 +39,9 @@ describe('TraceTimer: simple', ()=>{
     };
     assert.deepEqual(timer, timerExpected);
   });
+  it('should not create timer without name', ()=>{
+    assert.throws(()=>new TraceTimer(), Error, 'name must be provided for timer');
+  });
   it('should create timer with meta', ()=>{
     const timer = new TraceTimer('someName', {a: 1});
     const timerExpected = {
@@ -79,6 +82,47 @@ describe('TraceTimer: simple', ()=>{
     };
     assert.deepEqual(timer, timerExpected3);
   });
+  it('should log time manually with finish func', ()=>{
+    const timer = new TraceTimer('someName');
+    clock.tick(100);
+    timer.finish();
+    const timerExpected = {
+      start: 100,
+      end: 200,
+      children: [],
+      meta: null,
+      name: 'someName',
+      blocking: false,
+    };
+    assert.deepEqual(timer, timerExpected);
+  });
+
+  it('should throw when finish called after finish', ()=>{
+    const timer = new TraceTimer('someName');
+    clock.tick(100);
+    timer.finish();
+    assert.throws(()=>timer.finish(), Error, 'Timer already finished before finish');
+  });
+
+  it('should throw when countSync called after finish', ()=>{
+    const timer = new TraceTimer('someName');
+    timer.countSync(()=>{ clock.tick(100); return 1; });
+    assert.throws(()=>timer.countSync(()=>{ clock.tick(100); return 1; }), Error, 'Timer already finished before countSync');
+  });
+
+  it('should throw when countAsync called after finish', async ()=>{
+    const timer = new TraceTimer('someName');
+    await timer.countAsync(()=>{ clock.tick(100); return 1; });
+    await assert.rejects(timer.countAsync(()=>{ clock.tick(100); return 1; }), Error, 'Timer already finished before countASync');
+  });
+
+  it('should throw when countPromise called after finish', async ()=>{
+    const timer = new TraceTimer('someName');
+    async function xxx() { clock.tick(100); return 1; }
+    await timer.countPromise(xxx());
+    await assert.rejects(timer.countPromise((xxx()), Error, 'Timer already finished before countSync'));
+  });
+
   it('should log time for sync functions', ()=>{
     const timer = new TraceTimer('someName');
     const res = timer.countSync(()=>{ clock.tick(100); return 1; });
@@ -177,7 +221,8 @@ describe('TraceTimer: complex', ()=>{
   let clock;
   let timeStub;
   let timer;
-  before(()=>{
+  let timer12;
+  beforeEach(()=>{
     clock = sinon.useFakeTimers(100);
     timeStub = sinon.stub(performance, 'now').callsFake(()=>new Date().getTime());
     timer = new TraceTimer('someName', null);
@@ -186,17 +231,21 @@ describe('TraceTimer: complex', ()=>{
     const timer2 = new TraceTimer('someChild2', null);
     timer2.countSync(()=>clock.tick(100));
     // eslint-disable-next-line sonarjs/no-duplicate-string
-    const timer3 = new TraceTimer('someChild1.1', {a: 1});
-    timer3.countSync(()=>clock.tick(100));
+    const timer11 = new TraceTimer('someChild1.1', {a: 1});
+    timer11.countSync(()=>clock.tick(100));
     // eslint-disable-next-line sonarjs/no-duplicate-string
-    const timer4 = new TraceTimer('someChild1.2', null);
-    timer4.countSync(()=>clock.tick(200));
+    timer12 = new TraceTimer('someChild1.2', null);
+    timer12.countSync(()=>clock.tick(200));
+    // eslint-disable-next-line sonarjs/no-duplicate-string
+    const timer21 = new TraceTimer('someChild2.1', null);
+    timer21.countSync(()=>clock.tick(100));
     timer.addChild(timer1);
     timer.addChild(timer2);
-    timer1.addChild(timer3);
-    timer1.addChild(timer4, true);
+    timer1.addChild(timer11);
+    timer2.addChild(timer21);
+    timer1.addChild(timer12, true);
   });
-  after(()=>{
+  afterEach(()=>{
     clock.restore();
     timeStub.restore();
   });
@@ -218,7 +267,62 @@ describe('TraceTimer: complex', ()=>{
         }],
         end: 200,
       }, {
-        start: 200, blocking: false, meta: null, name: 'someChild2', children: [], end: 300,
+        start: 200,
+        blocking: false,
+        meta: null,
+        name: 'someChild2',
+        children: [
+          {
+            blocking: false,
+            children: [],
+            end: 700,
+            meta: null,
+            name: 'someChild2.1',
+            start: 600,
+          },
+        ],
+        end: 300,
+      }],
+    };
+    assert.deepEqualClone(timer, timerExpected);
+  });
+
+  it('should be able to add meta to main timer', ()=>{
+    timer12.addMetaMain({lol: true});
+    assert.equal(timer12.meta, null);
+    assert.deepEqual(timer.getMeta(), {lol: true});
+    const timerExpected = {
+      start: 100,
+      blocking: false,
+      meta: {lol: true},
+      name: 'someName',
+      children: [{
+        start: 100,
+        blocking: false,
+        meta: null,
+        name: 'someChild1',
+        children: [{
+          start: 300, blocking: false, meta: {a: 1}, name: 'someChild1.1', children: [], end: 400,
+        }, {
+          start: 400, blocking: true, meta: null, name: 'someChild1.2', children: [], end: 600,
+        }],
+        end: 200,
+      }, {
+        start: 200,
+        blocking: false,
+        meta: null,
+        name: 'someChild2',
+        children: [
+          {
+            blocking: false,
+            children: [],
+            end: 700,
+            meta: null,
+            name: 'someChild2.1',
+            start: 600,
+          },
+        ],
+        end: 300,
       }],
     };
     assert.deepEqualClone(timer, timerExpected);
@@ -256,6 +360,12 @@ describe('TraceTimer: complex', ()=>{
         spent: 100,
         end: 300,
         name: 'someName:someChild2',
+      },
+      {
+        start: 600,
+        spent: 100,
+        end: 700,
+        name: 'someName:someChild2:someChild2.1',
       },
     ]);
   });
@@ -303,7 +413,18 @@ describe('TraceTimer: complex', ()=>{
           start: 400, end: 600, name: 'someChild1.2', blocking: true, spent: 200,
         }],
       }, {
-        start: 200, end: 300, name: 'someChild2', spent: 100,
+        start: 200,
+        end: 300,
+        children: [
+          {
+            end: 700,
+            name: 'someChild2.1',
+            start: 600,
+            spent: 100,
+          },
+        ],
+        name: 'someChild2',
+        spent: 100,
       }],
     });
   });

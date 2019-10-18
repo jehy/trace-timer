@@ -41,7 +41,7 @@ class TraceTimer {
   */
   constructor(name, meta = null) {
     if (!name) {
-      throw new Error('name should be provided for timer!');
+      throw new Error('name must be provided for timer');
     }
     this.start = getMillis();
     this.meta = meta;
@@ -59,7 +59,7 @@ class TraceTimer {
   addChild(timer, blocking = false) {
     this.children.push(timer);
     timer.blocking = blocking;
-    timer.addMetaMain = this.addMetaMain;
+    timer.addMetaMain = (meta)=>this.addMetaMain(meta);
     return timer;
   }
 
@@ -67,6 +67,9 @@ class TraceTimer {
    * Manually finish timer instead of wrapping a func, better not use it
    */
   finish() {
+    if (this.end) {
+      throw new Error('Timer already finished before finish!');
+    }
     this.end = getMillis();
   }
 
@@ -76,6 +79,9 @@ class TraceTimer {
    * @returns function return value
    */
   countSync(func) {
+    if (this.end) {
+      throw new Error('Timer already finished before countSync!');
+    }
     try {
       return func();
     } catch (err) {
@@ -92,6 +98,9 @@ class TraceTimer {
    * @returns function return value
    */
   async countAsync(func) {
+    if (this.end) {
+      throw new Error('Timer already finished before countAsync!');
+    }
     try {
       return await func();
     } catch (err) {
@@ -109,6 +118,9 @@ class TraceTimer {
    * @returns function return value
    */
   async countPromise(promise) {
+    if (this.end) {
+      throw new Error('Timer already finished before countPromise!');
+    }
     try {
       return await promise;
     } catch (err) {
@@ -170,6 +182,9 @@ class TraceTimer {
         return res.concat(childTimer.toTable(min, `${currentPrefix}${this.name}`));
       }, [])
       .filter((el)=>el);
+    if (!moreThanMin && childrenTable.length === 0) {
+      return false;
+    }
     return thisRow.concat(childrenTable);
   }
 

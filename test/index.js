@@ -446,4 +446,9 @@ describe('TraceTimer: complex', ()=>{
       }],
     });
   });
+
+  it('should be able self destruct', ()=>{
+    timer.destroy();
+    timer12.addMetaMain({lol: true});
+  });
 });

@@ -20,6 +20,13 @@ function timerToJson(timer) {
   };
 }
 
+function destroyChildren(timer) {
+  timer.children.forEach((child)=>{
+    child.addMetaMain = child.addMeta;
+    destroyChildren(child);
+  });
+}
+
 function timerToRow(prefix, timer) {
   const spent = timer.end && timer.end - timer.start;
   return {
@@ -209,6 +216,17 @@ class TraceTimer {
       return false;
     }
     return {...thisTimer, children: childTimers};
+  }
+
+  /**
+   * Avoid circular dependencies which can mess up Garbage Collector
+   */
+  destroy() {
+    destroyChildren(this);
+    this.addMeta = undefined;
+    this.addMetaMain = undefined;
+    this.children = undefined;
+    this.meta = undefined;
   }
 }
 
